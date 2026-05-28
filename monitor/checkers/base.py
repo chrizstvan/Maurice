@@ -3,9 +3,9 @@ checkers/base.py
 Abstract base class for all price checkers.
 
 To add a new checker type:
-1. Create checkers/<type>.py with a class extending BaseChecker
-2. Add it to the REGISTRY in checkers/__init__.py
-3. Add its routes under the matching key in config.CHECKER_ROUTES
+1. Create monitor/checkers/<type>.py with a class extending BaseChecker
+2. Add it to the REGISTRY in monitor/checkers/__init__.py
+3. Add its routes under the matching key in core/config.py CHECKER_ROUTES
 
 WARNING: Never change price_key() return values — doing so silently loses
 price history for all existing routes of that checker type.
@@ -48,14 +48,24 @@ class BaseChecker(ABC):
             f"(Still above your target of {route['max_price']:,})"
         )
 
-    def run(self, last_prices: dict, notify_fn, record_fn=None) -> None:
+    def run(
+        self,
+        last_prices: dict,
+        notify_fn,
+        record_fn=None,
+        get_history_fn=None,
+        reason_fn=None,
+    ) -> None:
         """
         Generic check loop. Iterates routes, fetches prices, compares to target
         and last known price, calls notify_fn when alerting. Mutates last_prices
         in place — caller owns loading and saving.
 
-        Optional record_fn(route_label, price, currency, details) is called after
-        each successful fetch to persist prices to a database.
+        Optional callbacks:
+          record_fn(route_label, price, currency, details) — persist to DB
+          get_history_fn(route_label) -> list — fetch past price records from DB
+          reason_fn(route, result, history) -> str — LLM-generated alert message;
+              falls back to format_alert / format_price_drop if unavailable or raises
         """
         logger.info(f"=== Checking {self.checker_type.upper()} ===")
 
@@ -70,19 +80,48 @@ class BaseChecker(ABC):
                 result = None
 
             if result is None:
-                from telegram_notify import format_error_alert
+                from services.notify import format_error_alert
                 notify_fn(format_error_alert(self.checker_type, f"No data for {route['label']}"))
                 continue
 
             price = result["price"]
             last_price = last_prices.get(key)
 
-            if price <= route["max_price"]:
-                logger.info(f"ALERT: {route['label']} is {price:,} (target: {route['max_price']:,})")
-                notify_fn(self.format_alert(route, result))
-            elif last_price is not None and price < last_price:
-                logger.info(f"Price dropped: {route['label']} {last_price:,} → {price:,}")
-                notify_fn(self.format_price_drop(route, last_price, price))
+            # Fetch history before recording so it contains only past data points
+            history = []
+            if get_history_fn is not None:
+                try:
+                    history = get_history_fn(route["label"])
+                except Exception as e:
+                    logger.warning(f"Could not fetch price history for {route['label']}: {e}")
+
+            should_alert = price <= route["max_price"]
+            should_drop_notify = not should_alert and last_price is not None and price < last_price
+
+            if should_alert or should_drop_notify:
+                if reason_fn is not None:
+                    try:
+                        message = reason_fn(route, result, history)
+                    except Exception as e:
+                        logger.warning(f"LLM reasoning failed, falling back to template: {e}")
+                        message = (
+                            self.format_alert(route, result)
+                            if should_alert
+                            else self.format_price_drop(route, last_price, price)
+                        )
+                else:
+                    message = (
+                        self.format_alert(route, result)
+                        if should_alert
+                        else self.format_price_drop(route, last_price, price)
+                    )
+
+                if should_alert:
+                    logger.info(f"ALERT: {route['label']} is {price:,} (target: {route['max_price']:,})")
+                else:
+                    logger.info(f"Price dropped: {route['label']} {last_price:,} → {price:,}")
+
+                notify_fn(message)
             else:
                 logger.info(f"No alert for {route['label']} — price {price:,}")
 

@@ -50,3 +50,22 @@ CREATE TABLE IF NOT EXISTS recurring_expenses (
     currency TEXT    NOT NULL DEFAULT 'IDR',
     active   BOOLEAN NOT NULL DEFAULT TRUE
 );
+
+-- Watched routes (dynamic — managed via Telegram bot)
+CREATE TABLE IF NOT EXISTS watched_routes (
+    id          BIGSERIAL PRIMARY KEY,
+    type        TEXT    NOT NULL,             -- 'flights' | 'trains' | 'hotels'
+    from_code   TEXT    NOT NULL,             -- IATA/KAI code, or destination for hotels
+    to_code     TEXT    NOT NULL,
+    label       TEXT    NOT NULL,             -- human-readable e.g. "CGK → DPS"
+    travel_date DATE    NOT NULL,             -- departure date or check-in date
+    max_price   NUMERIC NOT NULL,             -- per night for hotels
+    currency    TEXT    NOT NULL DEFAULT 'IDR',
+    seat_class  TEXT,                         -- trains only: EKS | BIS | EKO
+    params      JSONB   DEFAULT '{}',         -- type-specific extras e.g. {check_out, guests}
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Run this if the table already exists (adds params column to existing installs):
+-- ALTER TABLE watched_routes ADD COLUMN IF NOT EXISTS params JSONB DEFAULT '{}';

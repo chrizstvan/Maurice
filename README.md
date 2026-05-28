@@ -10,17 +10,23 @@ Maurice watches flight and train prices while you sleep, tracks your spending as
 
 ### Watches prices so you don't have to
 
-Tell Maurice which routes you care about and what you're willing to pay. It checks every few hours and messages you the moment a price drops to your target — or just notifies you of significant drops even when the target isn't hit yet.
+Tell Maurice which routes and hotels you care about and what you're willing to pay — directly from Telegram. It checks every few hours and messages you the moment a price drops to your target, with an LLM-generated analysis of the price trend and a booking recommendation grounded in historical data.
 
 ```
-✈️ FLIGHT PRICE ALERT
-Route   : Jakarta → Bali
-Date    : Aug 15
-Airline : Lion Air
-Price   : IDR 389,000
-Target  : IDR 500,000
+✈️ Jakarta → Bali
 
-👉 Book now before it goes up!
+This is the lowest price in 3 weeks — IDR 389,000 vs. an average
+of 520,000. The trend has been consistently falling since May 20.
+Your target is 500,000 and this comfortably beats it.
+Book now: prices typically rise 10–14 days before departure.
+```
+
+Flights, trains, and hotels are all supported. Add any route in seconds:
+
+```
+/addroute flights CGK DPS 2026-08-15 500000
+/addroute trains GMR YK 2026-08-15 350000 EKS
+/addroute hotels Bali 2026-08-15 2026-08-20 800000
 ```
 
 ### Reads your receipts
@@ -88,6 +94,18 @@ The LLM provider is swappable — point it at Anthropic, OpenAI, or Gemini with 
 
 ## Bot commands
 
+**Price monitoring**
+
+| Command | What it does |
+|---------|-------------|
+| `/addroute flights CGK DPS 2026-08-15 500000` | Watch a flight route |
+| `/addroute trains GMR YK 2026-08-15 350000 EKS` | Watch a train route |
+| `/addroute hotels Bali 2026-08-15 2026-08-20 800000` | Watch hotel prices |
+| `/routes` | List everything you're watching |
+| `/removeroute <id>` | Stop watching a route |
+
+**Budgets & expenses**
+
 | Command | What it does |
 |---------|-------------|
 | `/budget` | Show your active budget at a glance |
@@ -110,4 +128,4 @@ Maurice is named after the idea of a dependable friend who remembers things, wat
 
 ## Tech
 
-Python · Supabase · Telegram Bot API · GitHub Actions · Render · SerpAPI · KAI · Frankfurter
+Python · Supabase · Telegram Bot API · GitHub Actions · Render · SerpAPI (Flights & Hotels) · KAI · Frankfurter

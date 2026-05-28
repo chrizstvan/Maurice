@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-monthly_reset.py — Create a new monthly budget and pre-load recurring expenses.
+jobs/monthly_reset.py — Create a new monthly budget and pre-load recurring expenses.
 Run on the 1st of each month via GitHub Actions.
 """
 import os
@@ -8,9 +8,10 @@ import sys
 import logging
 from pathlib import Path
 
-os.chdir(Path(__file__).parent)
+os.chdir(Path(__file__).parent.parent)
 
-import config  # noqa: F401 — loads .env into os.environ
+from core import config, db  # noqa: F401 — config import loads .env into os.environ
+from services.notify import send_message
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,8 +20,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-import db
-from telegram_notify import send_message
 from datetime import date
 
 MONTHLY_BUDGET_AMOUNT = float(os.environ.get("MONTHLY_BUDGET_AMOUNT", "8000000"))

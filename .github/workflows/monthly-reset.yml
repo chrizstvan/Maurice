@@ -22,4 +22,4 @@ jobs:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           MONTHLY_BUDGET_AMOUNT: ${{ secrets.MONTHLY_BUDGET_AMOUNT }}
-        run: python monthly_reset.py
+        run: python jobs/monthly_reset.py

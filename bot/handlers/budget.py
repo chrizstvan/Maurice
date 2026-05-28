@@ -1,6 +1,5 @@
 """Budget and trip command handlers."""
-import db
-import llm
+from core import db, llm
 from datetime import date
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -9,9 +8,13 @@ from telegram.ext import ContextTypes
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = (
         "Hi! I'm Maurice, your finance assistant.\n\n"
-        "Commands:\n"
-        "/budget — view or create a budget\n"
-        "/report — budget summary with insights\n"
+        "<b>Price monitoring</b>\n"
+        "/addroute — watch a flight or train route\n"
+        "/routes — list watched routes\n"
+        "/removeroute &lt;id&gt; — stop watching a route\n\n"
+        "<b>Budgets</b>\n"
+        "/budget — view active budget\n"
+        "/report — full breakdown with insights\n"
         "/newtrip &lt;name&gt; &lt;amount&gt; &lt;start&gt; &lt;end&gt; — create trip budget\n"
         "/trip — active trip summary\n"
         "/month — current month summary\n"

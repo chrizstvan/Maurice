@@ -1,27 +1,21 @@
 #!/usr/bin/env python3
-"""bot.py — Always-on Telegram budget bot. Deploy on Render."""
+"""bot/main.py — Always-on Telegram budget bot. Deploy on Render."""
 import os
 from pathlib import Path
+os.chdir(Path(__file__).parent.parent)
 
-os.chdir(Path(__file__).parent)
-
-import config
+from core import config
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters
 
-from handlers.receipt_handler import receipt_handler
-from handlers.text_handler import text_handler
-from handlers.report_handler import report_command
-from handlers.budget_handler import (
-    budget_command,
-    newtrip_command,
-    trip_command,
-    month_command,
-    setbudget_command,
-    recurring_command,
-    start_command,
+from bot.handlers.receipt import receipt_handler
+from bot.handlers.text import text_handler
+from bot.handlers.report import report_command
+from bot.handlers.routes import addroute_command, routes_command, removeroute_command
+from bot.handlers.budget import (
+    budget_command, newtrip_command, trip_command, month_command,
+    setbudget_command, recurring_command, start_command,
 )
-
 
 def main():
     app = ApplicationBuilder().token(config.TELEGRAM_BOT_TOKEN).build()
@@ -34,9 +28,11 @@ def main():
     app.add_handler(CommandHandler("month", month_command))
     app.add_handler(CommandHandler("setbudget", setbudget_command))
     app.add_handler(CommandHandler("recurring", recurring_command))
+    app.add_handler(CommandHandler("addroute", addroute_command))
+    app.add_handler(CommandHandler("routes", routes_command))
+    app.add_handler(CommandHandler("removeroute", removeroute_command))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_handler))
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()

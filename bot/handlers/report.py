@@ -1,6 +1,5 @@
 """Report command — show budget summary with LLM insight."""
-import db
-import llm
+from core import db, llm
 from datetime import date
 from telegram import Update
 from telegram.ext import ContextTypes

@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-agent.py — Main Price Monitor Agent
+monitor/agent.py — Main Price Monitor Agent
 Run manually or via cron job.
 
 Usage:
-    python3 agent.py             # check everything
-    python3 agent.py --flights   # check flights only
-    python3 agent.py --trains    # check trains only
+    python3 monitor/agent.py             # check everything
+    python3 monitor/agent.py --flights   # check flights only
+    python3 monitor/agent.py --trains    # check trains only
 """
 
 import json
@@ -17,7 +17,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-os.chdir(Path(__file__).parent)
+os.chdir(Path(__file__).parent.parent)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,10 +29,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-import config
-import db
-from checkers import REGISTRY
-from telegram_notify import send_message
+from core import config
+from core import db
+from core import llm
+from monitor.checkers import REGISTRY
+from services.notify import send_message
 
 
 def load_last_prices() -> dict:
@@ -60,6 +61,18 @@ def record_price(route_label: str, price: float, currency: str, details: dict):
         logger.warning(f"Failed to record price to DB: {e}")
 
 
+def get_price_history(route_label: str) -> list:
+    try:
+        return db.get_recent_history(route_label, limit=10)
+    except Exception as e:
+        logger.warning(f"Failed to fetch price history for {route_label}: {e}")
+        return []
+
+
+def reason_price(route: dict, result: dict, history: list) -> str:
+    return llm.reason_price(route, result, history)
+
+
 def main():
     parser = argparse.ArgumentParser(description="Price Monitor Agent")
     for checker_type in REGISTRY:
@@ -78,13 +91,29 @@ def main():
 
     last_prices = load_last_prices()
 
+    # Load routes from DB; fall back to config if DB is unavailable or empty
+    try:
+        all_routes = db.get_watched_routes()
+        if not any(all_routes.values()):
+            raise ValueError("no routes in DB")
+        logger.info("Routes loaded from Supabase.")
+    except Exception as e:
+        logger.info(f"Using config routes ({e}).")
+        all_routes = config.CHECKER_ROUTES
+
     for checker_type in types_to_run:
-        routes = config.CHECKER_ROUTES.get(checker_type, [])
+        routes = all_routes.get(checker_type, [])
         if not routes:
             logger.info(f"No routes configured for {checker_type}, skipping.")
             continue
         checker = REGISTRY[checker_type](routes=routes, config=config)
-        checker.run(last_prices, notify_fn=notify, record_fn=record_price)
+        checker.run(
+            last_prices,
+            notify_fn=notify,
+            record_fn=record_price,
+            get_history_fn=get_price_history,
+            reason_fn=reason_price,
+        )
 
     save_last_prices(last_prices)
 

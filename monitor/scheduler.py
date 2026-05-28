@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-llm_scheduler.py — GitHub Actions entrypoint for price checks.
+monitor/scheduler.py — GitHub Actions entrypoint for price checks.
 Called by .github/workflows/price-check.yml on a cron schedule.
-Runs agent.py if the current time window is safe (non-peak hours).
+Runs monitor/agent.py if the current time window is safe (non-peak hours).
 """
 import sys
 import subprocess
@@ -10,7 +10,7 @@ import logging
 from pathlib import Path
 import os
 
-os.chdir(Path(__file__).parent)
+os.chdir(Path(__file__).parent.parent)
 
 # Log to stdout only — GitHub Actions captures stdout
 logging.basicConfig(
@@ -19,7 +19,7 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 
-import llm
+from core import llm
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
         logging.info("Skipping — current hour is a busy window.")
         sys.exit(0)
     logging.info("Running price check agent...")
-    result = subprocess.run([sys.executable, "agent.py"])
+    result = subprocess.run([sys.executable, "monitor/agent.py"])
     sys.exit(result.returncode)
 
 

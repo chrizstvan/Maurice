@@ -221,6 +221,95 @@ def create_monthly_budget_from_template(
     return budget
 
 
+# ---------------------------------------------------------------------------
+# Watched routes
+# ---------------------------------------------------------------------------
+
+def get_watched_routes() -> dict:
+    """Return active routes grouped by type, in the same shape as config.CHECKER_ROUTES."""
+    client = _client()
+    result = (
+        client.table("watched_routes")
+        .select("*")
+        .eq("active", True)
+        .order("created_at")
+        .execute()
+    )
+    grouped: dict = {}
+    for row in result.data or []:
+        route_type = row["type"]
+        entry = {
+            "from":       row["from_code"],
+            "to":         row["to_code"],
+            "date":       str(row["travel_date"]),
+            "max_price":  float(row["max_price"]),
+            "currency":   row["currency"],
+            "label":      row["label"],
+        }
+        if row.get("seat_class"):
+            entry["seat_class"] = row["seat_class"]
+        if row.get("params"):
+            entry.update(row["params"])
+        grouped.setdefault(route_type, []).append(entry)
+    return grouped
+
+
+def add_watched_route(
+    route_type: str,
+    from_code: str,
+    to_code: str,
+    label: str,
+    travel_date: str,
+    max_price: float,
+    currency: str = "IDR",
+    seat_class: str = None,
+    params: dict = None,
+) -> dict:
+    """Insert a new watched route and return the created row."""
+    client = _client()
+    row = {
+        "type":        route_type,
+        "from_code":   from_code,
+        "to_code":     to_code,
+        "label":       label,
+        "travel_date": travel_date,
+        "max_price":   max_price,
+        "currency":    currency,
+        "active":      True,
+    }
+    if seat_class:
+        row["seat_class"] = seat_class.upper()
+    if params:
+        row["params"] = params
+    result = client.table("watched_routes").insert(row).execute()
+    return result.data[0] if result.data else {}
+
+
+def remove_watched_route(route_id: int) -> Optional[dict]:
+    """Soft-delete a route by id (sets active=False). Returns the row or None."""
+    client = _client()
+    result = (
+        client.table("watched_routes")
+        .update({"active": False})
+        .eq("id", route_id)
+        .execute()
+    )
+    return result.data[0] if result.data else None
+
+
+def list_watched_routes() -> list:
+    """Return all active watched routes ordered by creation date."""
+    client = _client()
+    result = (
+        client.table("watched_routes")
+        .select("*")
+        .eq("active", True)
+        .order("created_at")
+        .execute()
+    )
+    return result.data or []
+
+
 def get_price_context_for_trip(destination: str, travel_date: str) -> list:
     """Return recent price history records matching the destination."""
     client = _client()

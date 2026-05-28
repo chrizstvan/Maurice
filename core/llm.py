@@ -183,6 +183,61 @@ def reason_budget(context: dict) -> str:
         raise ValueError(f"Unknown LLM_PROVIDER: {provider}")
 
 
+def reason_price(route: dict, current_result: dict, history: list) -> str:
+    """LLM reasoning for a price alert — returns a Telegram-ready HTML message.
+
+    route: from config (label, date, max_price, currency, from, to)
+    current_result: from checker.fetch() (price + provider-specific fields)
+    history: from db.get_recent_history() — previous price records, newest first
+    """
+    currency = route.get("currency", "IDR")
+    price = current_result["price"]
+    hit_target = price <= route["max_price"]
+
+    if history:
+        prices = [float(h["price"]) for h in history]
+        avg = sum(prices) / len(prices)
+        low = min(prices)
+        high = max(prices)
+        history_lines = "\n".join(
+            f"  {h['checked_at'][:16]}: {currency} {float(h['price']):,.0f}"
+            for h in history[:10]
+        )
+        history_summary = (
+            f"History ({len(history)} checks): avg {currency} {avg:,.0f}, "
+            f"low {currency} {low:,.0f}, high {currency} {high:,.0f}\n"
+            f"Recent checks:\n{history_lines}"
+        )
+    else:
+        history_summary = "No previous price history available — this is the first check."
+
+    details = {k: v for k, v in current_result.items() if k != "price"}
+    prompt = (
+        "You are a sharp travel price analyst sending a Telegram alert. "
+        "Write a concise message (3–5 sentences) that a traveler will actually find useful.\n\n"
+        f"Route      : {route['label']}\n"
+        f"Travel date: {route['date']}\n"
+        f"Current    : {currency} {price:,}\n"
+        f"Target     : {currency} {route['max_price']:,}\n"
+        f"Hit target : {'YES' if hit_target else 'NO — price dropped but still above target'}\n"
+        f"Details    : {details}\n\n"
+        f"{history_summary}\n\n"
+        "Cover: is this price good vs. history, is the trend up or down, and give a clear "
+        "booking recommendation. Use Telegram HTML formatting (<b> for key numbers). "
+        "Open with a relevant emoji and the route name."
+    )
+
+    provider = _provider()
+    if provider == "anthropic":
+        return _anthropic_text(prompt, "claude-opus-4-7")
+    elif provider == "openai":
+        return _openai_text(prompt, "gpt-4o")
+    elif provider == "gemini":
+        return _gemini_text(prompt, "gemini-1.5-pro")
+    else:
+        raise ValueError(f"Unknown LLM_PROVIDER: {provider}")
+
+
 def categorize_expense(text: str) -> dict:
     """Parse Indonesian shorthand expense text.
 

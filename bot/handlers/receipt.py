@@ -1,6 +1,5 @@
 """Receipt photo handler — extract expense from photo, confirm with user, save."""
-import db
-import llm
+from core import db, llm
 from datetime import date
 from telegram import Update
 from telegram.ext import ContextTypes

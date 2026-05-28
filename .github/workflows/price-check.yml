@@ -1,6 +1,13 @@
 name: Price Check
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'monitor/**'
+      - 'core/**'
+      - 'services/**'
+      - 'requirements.txt'
   schedule:
     - cron: '0 */2 * * *'   # every 2 hours
   workflow_dispatch:          # allow manual trigger
@@ -26,4 +33,4 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python llm_scheduler.py
+        run: python monitor/scheduler.py
