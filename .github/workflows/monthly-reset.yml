@@ -1,8 +1,8 @@
 name: Monthly Budget Reset
 
-on:
-  schedule:
-    - cron: '0 0 1 * *'   # midnight on the 1st of every month
+# on:
+#   schedule:
+#     - cron: '0 0 1 * *'   # midnight on the 1st of every month
   workflow_dispatch:
 
 jobs:

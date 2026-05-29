@@ -1,15 +1,15 @@
 name: Price Check
 
-on:
-  push:
-    branches: [main]
-    paths:
-      - 'monitor/**'
-      - 'core/**'
-      - 'services/**'
-      - 'requirements.txt'
-  schedule:
-    - cron: '0 */2 * * *'   # every 2 hours
+# on:
+#   push:
+#     branches: [main]
+#     paths:
+#       - 'monitor/**'
+#       - 'core/**'
+#       - 'services/**'
+#       - 'requirements.txt'
+#   schedule:
+#     - cron: '0 */2 * * *'   # every 2 hours
   workflow_dispatch:          # allow manual trigger
 
 jobs:
