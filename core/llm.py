@@ -152,7 +152,7 @@ def read_receipt(image_bytes: bytes) -> dict:
     )
     provider = _provider()
     if provider == "anthropic":
-        raw = _anthropic_vision(image_bytes, prompt, "claude-opus-4-7")
+        raw = _anthropic_vision(image_bytes, prompt, "claude-sonnet-4-6")
     elif provider == "openai":
         raw = _openai_vision(image_bytes, prompt, "gpt-4o")
     elif provider == "gemini":
@@ -176,7 +176,7 @@ def reason_budget(context: dict) -> str:
     )
     provider = _provider()
     if provider == "anthropic":
-        return _anthropic_text(prompt, "claude-opus-4-7")
+        return _anthropic_text(prompt, "claude-sonnet-4-6")
     elif provider == "openai":
         return _openai_text(prompt, "gpt-4o")
     elif provider == "gemini":
@@ -231,7 +231,7 @@ def reason_price(route: dict, current_result: dict, history: list) -> str:
 
     provider = _provider()
     if provider == "anthropic":
-        return _anthropic_text(prompt, "claude-opus-4-7")
+        return _anthropic_text(prompt, "claude-sonnet-4-6")
     elif provider == "openai":
         return _openai_text(prompt, "gpt-4o")
     elif provider == "gemini":
