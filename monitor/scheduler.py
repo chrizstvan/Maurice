@@ -29,7 +29,7 @@ def main():
         logging.info("Skipping — current hour is a busy window.")
         sys.exit(0)
     logging.info("Running price check agent...")
-    result = subprocess.run([sys.executable, "monitor/agent.py"])
+    result = subprocess.run([sys.executable, "monitor/agent.py", "--flights"])
     sys.exit(result.returncode)
 
 
