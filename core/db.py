@@ -225,12 +225,26 @@ def create_monthly_budget_from_template(
 # Watched routes
 # ---------------------------------------------------------------------------
 
+def deactivate_expired_routes() -> list:
+    """Set active=False for all routes whose travel date has passed. Returns deactivated rows."""
+    client = _client()
+    today = date.today().isoformat()
+    result = (
+        client.table("watched_routes")
+        .update({"active": False})
+        .eq("active", True)
+        .lt("travel_date", today)
+        .execute()
+    )
+    return result.data or []
+
+
 def get_watched_routes() -> dict:
-    """Return active routes grouped by type, in the same shape as config.CHECKER_ROUTES."""
+    """Return active routes grouped by type, with subscribers list attached to each route."""
     client = _client()
     result = (
         client.table("watched_routes")
-        .select("*")
+        .select("*, route_subscribers(chat_id)")
         .eq("active", True)
         .order("created_at")
         .execute()
@@ -238,13 +252,16 @@ def get_watched_routes() -> dict:
     grouped: dict = {}
     for row in result.data or []:
         route_type = row["type"]
+        subscribers = [s["chat_id"] for s in (row.get("route_subscribers") or [])]
         entry = {
-            "from":       row["from_code"],
-            "to":         row["to_code"],
-            "date":       str(row["travel_date"]),
-            "max_price":  float(row["max_price"]),
-            "currency":   row["currency"],
-            "label":      row["label"],
+            "id":          row["id"],
+            "from":        row["from_code"],
+            "to":          row["to_code"],
+            "date":        str(row["travel_date"]),
+            "max_price":   float(row["max_price"]),
+            "currency":    row["currency"],
+            "label":       row["label"],
+            "subscribers": subscribers,
         }
         if row.get("seat_class"):
             entry["seat_class"] = row["seat_class"]
@@ -264,50 +281,125 @@ def add_watched_route(
     currency: str = "IDR",
     seat_class: str = None,
     params: dict = None,
-) -> dict:
-    """Insert a new watched route and return the created row."""
+    chat_id: str = None,
+) -> tuple[dict, bool]:
+    """Add a route and subscribe chat_id to it.
+
+    Deduplicates: if an identical active route already exists, reuses it.
+    Returns (route_row, created) where created=False means route already existed.
+    """
     client = _client()
-    row = {
-        "type":        route_type,
-        "from_code":   from_code,
-        "to_code":     to_code,
-        "label":       label,
-        "travel_date": travel_date,
-        "max_price":   max_price,
-        "currency":    currency,
-        "active":      True,
-    }
-    if seat_class:
-        row["seat_class"] = seat_class.upper()
-    if params:
-        row["params"] = params
-    result = client.table("watched_routes").insert(row).execute()
-    return result.data[0] if result.data else {}
 
-
-def remove_watched_route(route_id: int) -> Optional[dict]:
-    """Soft-delete a route by id (sets active=False). Returns the row or None."""
-    client = _client()
-    result = (
-        client.table("watched_routes")
-        .update({"active": False})
-        .eq("id", route_id)
-        .execute()
-    )
-    return result.data[0] if result.data else None
-
-
-def list_watched_routes() -> list:
-    """Return all active watched routes ordered by creation date."""
-    client = _client()
-    result = (
+    # Check for existing identical active route
+    query = (
         client.table("watched_routes")
         .select("*")
+        .eq("type", route_type)
+        .eq("from_code", from_code)
+        .eq("to_code", to_code)
+        .eq("travel_date", travel_date)
         .eq("active", True)
-        .order("created_at")
+    )
+    if seat_class:
+        query = query.eq("seat_class", seat_class.upper())
+    existing = query.limit(1).execute()
+
+    if existing.data:
+        route_row = existing.data[0]
+        created = False
+    else:
+        row = {
+            "type":        route_type,
+            "from_code":   from_code,
+            "to_code":     to_code,
+            "label":       label,
+            "travel_date": travel_date,
+            "max_price":   max_price,
+            "currency":    currency,
+            "active":      True,
+        }
+        if seat_class:
+            row["seat_class"] = seat_class.upper()
+        if params:
+            row["params"] = params
+        result = client.table("watched_routes").insert(row).execute()
+        route_row = result.data[0] if result.data else {}
+        created = True
+
+    if chat_id and route_row.get("id"):
+        client.table("route_subscribers").upsert(
+            {"route_id": route_row["id"], "chat_id": str(chat_id)},
+            on_conflict="route_id,chat_id",
+        ).execute()
+
+    return route_row, created
+
+
+def remove_watched_route(route_id: int, chat_id: str = None) -> Optional[dict]:
+    """Unsubscribe chat_id from a route. Deactivates the route if no subscribers remain."""
+    client = _client()
+
+    route_result = (
+        client.table("watched_routes").select("*").eq("id", route_id).limit(1).execute()
+    )
+    if not route_result.data:
+        return None
+    route_row = route_result.data[0]
+
+    if chat_id:
+        client.table("route_subscribers").delete().eq("route_id", route_id).eq("chat_id", str(chat_id)).execute()
+
+    remaining = (
+        client.table("route_subscribers").select("id").eq("route_id", route_id).execute()
+    )
+    if not remaining.data:
+        client.table("watched_routes").update({"active": False}).eq("id", route_id).execute()
+
+    return route_row
+
+
+def list_watched_routes(chat_id: str = None) -> list:
+    """Return active watched routes. If chat_id given, return only that user's subscriptions."""
+    client = _client()
+    if chat_id:
+        subs = (
+            client.table("route_subscribers")
+            .select("route_id")
+            .eq("chat_id", str(chat_id))
+            .execute()
+        )
+        route_ids = [s["route_id"] for s in (subs.data or [])]
+        if not route_ids:
+            return []
+        result = (
+            client.table("watched_routes")
+            .select("*")
+            .eq("active", True)
+            .in_("id", route_ids)
+            .order("created_at")
+            .execute()
+        )
+    else:
+        result = (
+            client.table("watched_routes")
+            .select("*")
+            .eq("active", True)
+            .order("created_at")
+            .execute()
+        )
+    return result.data or []
+
+
+def get_route_subscribers(route_id: int) -> list[str]:
+    """Return list of chat_ids subscribed to a route."""
+    client = _client()
+    result = (
+        client.table("route_subscribers")
+        .select("chat_id")
+        .eq("route_id", route_id)
         .execute()
     )
-    return result.data or []
+    return [r["chat_id"] for r in (result.data or [])]
 
 
 def get_price_context_for_trip(destination: str, travel_date: str) -> list:

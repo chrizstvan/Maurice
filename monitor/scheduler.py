@@ -10,7 +10,9 @@ import logging
 from pathlib import Path
 import os
 
-os.chdir(Path(__file__).parent.parent)
+ROOT = Path(__file__).parent.parent
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
 
 # Log to stdout only — GitHub Actions captures stdout
 logging.basicConfig(

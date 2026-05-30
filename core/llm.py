@@ -8,6 +8,8 @@ import json
 import os
 import re
 
+from core.prompts import DECIDE_CHECK_SYSTEM
+
 # Busy hours: 7-9 AM and 7 PM-midnight (local time)
 BUSY_HOURS = set(range(7, 10)) | set(range(19, 24))
 
@@ -236,6 +238,104 @@ def reason_price(route: dict, current_result: dict, history: list) -> str:
         return _gemini_text(prompt, "gemini-1.5-pro")
     else:
         raise ValueError(f"Unknown LLM_PROVIDER: {provider}")
+
+
+def decide_check(route: dict, history: list, last_check_time: str = None) -> dict:
+    """Ask Haiku whether now is a good time to check prices for this route.
+
+    Returns: {check_now: bool, confidence: float, reason: str, suggested_wait_hours: int}
+    Falls back to check_now=True on any error so checks are never silently skipped.
+    """
+    from datetime import datetime
+
+    fallback = {
+        "check_now": True,
+        "confidence": 0.0,
+        "reason": "LLM unavailable — defaulting to check",
+        "suggested_wait_hours": 0,
+    }
+
+    try:
+        now = datetime.now()
+        travel_date = route.get("date", "")
+        days_until = None
+        if travel_date:
+            try:
+                days_until = (datetime.strptime(travel_date, "%Y-%m-%d") - now).days
+            except ValueError:
+                pass
+
+        if history:
+            history_lines = "\n".join(
+                f"  {h['checked_at'][:16]} | {route.get('currency', 'IDR')} {float(h['price']):,.0f}"
+                for h in history[:10]
+            )
+            last_price = float(history[0]["price"])
+            history_block = (
+                f"Last known price: {route.get('currency', 'IDR')} {last_price:,.0f}\n"
+                f"Last check time: {last_check_time or history[0].get('checked_at', 'unknown')}\n"
+                f"Price history ({len(history)} records, newest first):\n{history_lines}"
+            )
+        else:
+            history_block = "No price history yet. Use general knowledge only."
+
+        days_str = f"{days_until} days" if days_until is not None else "unknown"
+
+        system = DECIDE_CHECK_SYSTEM
+
+        user = (
+            f"Route     : {route.get('label', 'unknown')}\n"
+            f"Type      : {route.get('type', 'unknown')}\n"
+            f"Travel date: {travel_date} ({days_str} away)\n"
+            f"Current datetime: {now.strftime('%Y-%m-%d %H:%M')} (local)\n"
+            f"Day of week: {now.strftime('%A')}\n\n"
+            f"{history_block}\n\n"
+            "Should we check prices right now?"
+        )
+
+        provider = _provider()
+        if provider == "anthropic":
+            import anthropic
+            client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+            message = client.messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=256,
+                system=system,
+                messages=[{"role": "user", "content": user}],
+            )
+            raw = message.content[0].text
+        elif provider == "openai":
+            import openai
+            client = openai.OpenAI(api_key=os.environ["OPENAI_API_KEY"])
+            response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                max_tokens=256,
+                messages=[
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": user},
+                ],
+            )
+            raw = response.choices[0].message.content
+        elif provider == "gemini":
+            import google.generativeai as genai
+            genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+            gmodel = genai.GenerativeModel("gemini-1.5-flash", system_instruction=system)
+            response = gmodel.generate_content(user)
+            raw = response.text
+        else:
+            return fallback
+
+        result = json.loads(_strip_code_fences(raw))
+        result.setdefault("check_now", True)
+        result.setdefault("confidence", 0.5)
+        result.setdefault("reason", "")
+        result.setdefault("suggested_wait_hours", 0)
+        return result
+
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"decide_check failed: {e} — defaulting to check")
+        return fallback
 
 
 def categorize_expense(text: str) -> dict:

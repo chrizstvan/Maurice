@@ -33,7 +33,7 @@ CHECKER_ROUTES = {
             "from":      "CGK",
             "to":        "DPS",
             "date":      "2025-08-15",
-            "max_price": 500_000,
+            "max_price": 1_200_000,
             "currency":  "IDR",
             "label":     "Jakarta → Bali",
         },

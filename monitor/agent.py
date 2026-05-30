@@ -17,7 +17,9 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-os.chdir(Path(__file__).parent.parent)
+ROOT = Path(__file__).parent.parent
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
 
 logging.basicConfig(
     level=logging.INFO,
@@ -50,8 +52,12 @@ def save_last_prices(data: dict):
         json.dump(data, f, indent=2)
 
 
-def notify(text: str):
-    send_message(config.TELEGRAM_BOT_TOKEN, config.TELEGRAM_CHAT_ID, text)
+def notify(text: str, route: dict = None):
+    """Send alert to all route subscribers, falling back to global TELEGRAM_CHAT_ID."""
+    subscribers = route.get("subscribers") if route else None
+    targets = subscribers if subscribers else [config.TELEGRAM_CHAT_ID]
+    for chat_id in targets:
+        send_message(config.TELEGRAM_BOT_TOKEN, chat_id, text)
 
 
 def record_price(route_label: str, price: float, currency: str, details: dict):
@@ -73,6 +79,23 @@ def reason_price(route: dict, result: dict, history: list) -> str:
     return llm.reason_price(route, result, history)
 
 
+def decide_route(route: dict, history: list) -> bool:
+    last_check_time = history[0].get("checked_at") if history else None
+    try:
+        decision = llm.decide_check(route, history, last_check_time)
+        if not decision.get("check_now", True):
+            logger.info(
+                f"Skipping {route['label']} — {decision.get('reason')} "
+                f"(wait {decision.get('suggested_wait_hours', '?')}h)"
+            )
+            return False
+        logger.info(f"Checking {route['label']} — {decision.get('reason')}")
+        return True
+    except Exception as e:
+        logger.warning(f"decide_check failed for {route['label']}: {e} — proceeding")
+        return True
+
+
 def main():
     parser = argparse.ArgumentParser(description="Price Monitor Agent")
     for checker_type in REGISTRY:
@@ -90,6 +113,15 @@ def main():
     logger.info(f"Agent started at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     last_prices = load_last_prices()
+
+    # Expire past routes before loading
+    try:
+        expired = db.deactivate_expired_routes()
+        if expired:
+            labels = ", ".join(r.get("label", str(r.get("id"))) for r in expired)
+            logger.info(f"Auto-expired {len(expired)} route(s): {labels}")
+    except Exception as e:
+        logger.warning(f"Could not expire old routes: {e}")
 
     # Load routes from DB; fall back to config if DB is unavailable or empty
     try:
@@ -113,6 +145,7 @@ def main():
             record_fn=record_price,
             get_history_fn=get_price_history,
             reason_fn=reason_price,
+            decide_fn=decide_route,
         )
 
     save_last_prices(last_prices)

@@ -29,6 +29,8 @@ Flights, trains, and hotels are all supported. Add any route in seconds:
 /addroute hotels Bali 2026-08-15 2026-08-20 800000
 ```
 
+Multiple people can watch the same route — Maurice checks prices once and sends each subscriber their own alert. If a friend wants the same Jakarta→Bali alert, they just send the same `/addroute` command from their account.
+
 ### Reads your receipts
 
 Snap a photo of any receipt and send it. Maurice reads it, names the merchant, guesses the category, and asks for confirmation before logging it. No manual data entry, no spreadsheet to maintain.

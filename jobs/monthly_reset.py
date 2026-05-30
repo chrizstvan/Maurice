@@ -8,7 +8,9 @@ import sys
 import logging
 from pathlib import Path
 
-os.chdir(Path(__file__).parent.parent)
+ROOT = Path(__file__).parent.parent
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
 
 from core import config, db  # noqa: F401 — config import loads .env into os.environ
 from services.notify import send_message

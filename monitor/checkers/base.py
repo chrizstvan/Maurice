@@ -55,6 +55,7 @@ class BaseChecker(ABC):
         record_fn=None,
         get_history_fn=None,
         reason_fn=None,
+        decide_fn=None,
     ) -> None:
         """
         Generic check loop. Iterates routes, fetches prices, compares to target
@@ -66,11 +67,24 @@ class BaseChecker(ABC):
           get_history_fn(route_label) -> list — fetch past price records from DB
           reason_fn(route, result, history) -> str — LLM-generated alert message;
               falls back to format_alert / format_price_drop if unavailable or raises
+          decide_fn(route, history) -> bool — skip route if returns False
         """
         logger.info(f"=== Checking {self.checker_type.upper()} ===")
 
         for route in self.routes:
             key = self.price_key(route)
+
+            # Fetch history first — shared by decide_fn and reason_fn
+            history = []
+            if get_history_fn is not None:
+                try:
+                    history = get_history_fn(route["label"])
+                except Exception as e:
+                    logger.warning(f"Could not fetch price history for {route['label']}: {e}")
+
+            if decide_fn is not None and not decide_fn(route, history):
+                continue
+
             logger.info(f"Checking {route['label']} on {route['date']}...")
 
             try:
@@ -81,19 +95,11 @@ class BaseChecker(ABC):
 
             if result is None:
                 from services.notify import format_error_alert
-                notify_fn(format_error_alert(self.checker_type, f"No data for {route['label']}"))
+                notify_fn(format_error_alert(self.checker_type, f"No data for {route['label']}"), route)
                 continue
 
             price = result["price"]
             last_price = last_prices.get(key)
-
-            # Fetch history before recording so it contains only past data points
-            history = []
-            if get_history_fn is not None:
-                try:
-                    history = get_history_fn(route["label"])
-                except Exception as e:
-                    logger.warning(f"Could not fetch price history for {route['label']}: {e}")
 
             should_alert = price <= route["max_price"]
             should_drop_notify = not should_alert and last_price is not None and price < last_price
@@ -121,7 +127,7 @@ class BaseChecker(ABC):
                 else:
                     logger.info(f"Price dropped: {route['label']} {last_price:,} → {price:,}")
 
-                notify_fn(message)
+                notify_fn(message, route)
             else:
                 logger.info(f"No alert for {route['label']} — price {price:,}")
 

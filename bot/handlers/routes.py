@@ -20,7 +20,7 @@ Add a hotel (use _ for spaces in destination):
 <code>/addroute hotels Seminyak_Bali 2026-08-15 2026-08-20 500000 2</code>
 (last number = guests, default 2)
 
-List routes:  /routes
+List your routes:  /routes
 Remove route: /removeroute &lt;id&gt;
 """
 
@@ -37,13 +37,15 @@ async def addroute_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"Unknown type <b>{route_type}</b>. Available: {types}", parse_mode="HTML")
         return
 
+    chat_id = str(update.effective_chat.id)
+
     if route_type == "hotels":
-        await _addroute_hotel(update, args)
+        await _addroute_hotel(update, args, chat_id)
     else:
-        await _addroute_transport(update, args, route_type)
+        await _addroute_transport(update, args, route_type, chat_id)
 
 
-async def _addroute_transport(update, args: list, route_type: str):
+async def _addroute_transport(update, args: list, route_type: str, chat_id: str):
     # flights / trains: type from_code to_code date max_price [seat_class]
     if len(args) < 5:
         await update.message.reply_text(USAGE, parse_mode="HTML")
@@ -72,7 +74,7 @@ async def _addroute_transport(update, args: list, route_type: str):
         label += f" ({_SEAT_CLASS_LABELS.get(seat_class, seat_class)})"
 
     try:
-        row = db.add_watched_route(
+        row, created = db.add_watched_route(
             route_type=route_type,
             from_code=from_code,
             to_code=to_code,
@@ -80,21 +82,23 @@ async def _addroute_transport(update, args: list, route_type: str):
             travel_date=travel_date,
             max_price=max_price,
             seat_class=seat_class,
+            chat_id=chat_id,
         )
     except Exception as e:
         await update.message.reply_text(f"Failed to save route: {e}")
         return
 
     emoji = _TYPE_EMOJI.get(route_type, "🔍")
+    status = "Watching" if created else "Subscribed to existing watch for"
     await update.message.reply_text(
-        f"✓ Watching {emoji} <b>{label}</b>\n"
+        f"✓ {status} {emoji} <b>{label}</b>\n"
         f"Date: {travel_date} | Target: IDR {max_price:,.0f}\n"
-        f"ID: {row.get('id')} — use /removeroute {row.get('id')} to stop watching.",
+        f"ID: {row.get('id')} — use /removeroute {row.get('id')} to unsubscribe.",
         parse_mode="HTML",
     )
 
 
-async def _addroute_hotel(update, args: list):
+async def _addroute_hotel(update, args: list, chat_id: str):
     # hotels: type destination check_in check_out max_price [guests]
     if len(args) < 5:
         await update.message.reply_text(
@@ -122,7 +126,7 @@ async def _addroute_hotel(update, args: list):
 
     label = f"Hotels in {destination}"
     try:
-        row = db.add_watched_route(
+        row, created = db.add_watched_route(
             route_type="hotels",
             from_code=destination,
             to_code=destination,
@@ -130,6 +134,7 @@ async def _addroute_hotel(update, args: list):
             travel_date=check_in,
             max_price=max_price,
             params={"check_out": check_out, "guests": guests},
+            chat_id=chat_id,
         )
     except Exception as e:
         await update.message.reply_text(f"Failed to save route: {e}")
@@ -141,29 +146,31 @@ async def _addroute_hotel(update, args: list):
     except Exception:
         nights = "?"
 
+    status = "Watching" if created else "Subscribed to existing watch for"
     await update.message.reply_text(
-        f"✓ Watching 🏨 <b>{label}</b>\n"
+        f"✓ {status} 🏨 <b>{label}</b>\n"
         f"{check_in} → {check_out} ({nights} nights, {guests} guests)\n"
         f"Target: IDR {max_price:,.0f}/night\n"
-        f"ID: {row.get('id')} — use /removeroute {row.get('id')} to stop watching.",
+        f"ID: {row.get('id')} — use /removeroute {row.get('id')} to unsubscribe.",
         parse_mode="HTML",
     )
 
 
 async def routes_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = str(update.effective_chat.id)
     try:
-        routes = db.list_watched_routes()
+        routes = db.list_watched_routes(chat_id=chat_id)
     except Exception as e:
         await update.message.reply_text(f"Could not load routes: {e}")
         return
 
     if not routes:
         await update.message.reply_text(
-            "No routes being watched.\n\n" + USAGE, parse_mode="HTML"
+            "You have no routes being watched.\n\n" + USAGE, parse_mode="HTML"
         )
         return
 
-    lines = ["<b>Watched routes:</b>"]
+    lines = ["<b>Your watched routes:</b>"]
     for r in routes:
         emoji = _TYPE_EMOJI.get(r["type"], "🔍")
         if r["type"] == "hotels":
@@ -196,8 +203,9 @@ async def removeroute_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("ID must be a number.")
         return
 
+    chat_id = str(update.effective_chat.id)
     try:
-        row = db.remove_watched_route(route_id)
+        row = db.remove_watched_route(route_id, chat_id=chat_id)
     except Exception as e:
         await update.message.reply_text(f"Failed to remove route: {e}")
         return
@@ -207,5 +215,7 @@ async def removeroute_command(update: Update, context: ContextTypes.DEFAULT_TYPE
         return
 
     await update.message.reply_text(
-        f"✓ Stopped watching <b>{row.get('label', route_id)}</b>.", parse_mode="HTML"
+        f"✓ Unsubscribed from <b>{row.get('label', route_id)}</b>.\n"
+        f"(Route stays active for other subscribers if any remain.)",
+        parse_mode="HTML",
     )

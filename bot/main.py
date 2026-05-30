@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """bot/main.py — Always-on Telegram budget bot. Deploy on Render."""
 import os
+import sys
 from pathlib import Path
-os.chdir(Path(__file__).parent.parent)
+ROOT = Path(__file__).parent.parent
+os.chdir(ROOT)
+sys.path.insert(0, str(ROOT))
 
 from core import config
 from telegram import Update

@@ -10,6 +10,22 @@ CREATE TABLE IF NOT EXISTS price_history (
     checked_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Watched routes (dynamic — managed via Telegram bot)
+CREATE TABLE IF NOT EXISTS watched_routes (
+    id          BIGSERIAL PRIMARY KEY,
+    type        TEXT    NOT NULL,             -- 'flights' | 'trains' | 'hotels'
+    from_code   TEXT    NOT NULL,             -- IATA/KAI code, or destination for hotels
+    to_code     TEXT    NOT NULL,
+    label       TEXT    NOT NULL,             -- human-readable e.g. "CGK → DPS"
+    travel_date DATE    NOT NULL,             -- departure date or check-in date
+    max_price   NUMERIC NOT NULL,             -- per night for hotels
+    currency    TEXT    NOT NULL DEFAULT 'IDR',
+    seat_class  TEXT,                         -- trains only: EKS | BIS | EKO
+    params      JSONB   DEFAULT '{}',         -- type-specific extras e.g. {check_out, guests}
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- Budgets (Phase 1)
 CREATE TABLE IF NOT EXISTS budgets (
     id           BIGSERIAL PRIMARY KEY,
@@ -51,21 +67,15 @@ CREATE TABLE IF NOT EXISTS recurring_expenses (
     active   BOOLEAN NOT NULL DEFAULT TRUE
 );
 
--- Watched routes (dynamic — managed via Telegram bot)
-CREATE TABLE IF NOT EXISTS watched_routes (
-    id          BIGSERIAL PRIMARY KEY,
-    type        TEXT    NOT NULL,             -- 'flights' | 'trains' | 'hotels'
-    from_code   TEXT    NOT NULL,             -- IATA/KAI code, or destination for hotels
-    to_code     TEXT    NOT NULL,
-    label       TEXT    NOT NULL,             -- human-readable e.g. "CGK → DPS"
-    travel_date DATE    NOT NULL,             -- departure date or check-in date
-    max_price   NUMERIC NOT NULL,             -- per night for hotels
-    currency    TEXT    NOT NULL DEFAULT 'IDR',
-    seat_class  TEXT,                         -- trains only: EKS | BIS | EKO
-    params      JSONB   DEFAULT '{}',         -- type-specific extras e.g. {check_out, guests}
-    active      BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+-- Route subscribers — one row per (route, user) pair
+CREATE TABLE IF NOT EXISTS route_subscribers (
+    id         BIGSERIAL PRIMARY KEY,
+    route_id   BIGINT NOT NULL REFERENCES watched_routes(id) ON DELETE CASCADE,
+    chat_id    TEXT   NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (route_id, chat_id)
 );
 
--- Run this if the table already exists (adds params column to existing installs):
+-- Run these if the tables already exist (migration for existing installs):
 -- ALTER TABLE watched_routes ADD COLUMN IF NOT EXISTS params JSONB DEFAULT '{}';
+-- CREATE TABLE IF NOT EXISTS route_subscribers (id BIGSERIAL PRIMARY KEY, route_id BIGINT NOT NULL REFERENCES watched_routes(id) ON DELETE CASCADE, chat_id TEXT NOT NULL, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE (route_id, chat_id));
