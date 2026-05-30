@@ -59,6 +59,46 @@ def get_last_price(route_label: str) -> Optional[float]:
     return None
 
 
+def get_week_history(route_label: str) -> list:
+    """Return all price records for a route from the last 7 days, newest first."""
+    from datetime import datetime, timedelta
+    client = _client()
+    since = (datetime.utcnow() - timedelta(days=7)).isoformat()
+    result = (
+        client.table("price_history")
+        .select("*")
+        .eq("route_label", route_label)
+        .gte("checked_at", since)
+        .order("checked_at", desc=True)
+        .execute()
+    )
+    return result.data or []
+
+
+def get_all_subscribers() -> list[str]:
+    """Return all unique chat_ids subscribed to any active route."""
+    client = _client()
+    active = (
+        client.table("watched_routes").select("id").eq("active", True).execute()
+    )
+    route_ids = [r["id"] for r in (active.data or [])]
+    if not route_ids:
+        return []
+    result = (
+        client.table("route_subscribers")
+        .select("chat_id")
+        .in_("route_id", route_ids)
+        .execute()
+    )
+    seen = set()
+    unique = []
+    for r in result.data or []:
+        if r["chat_id"] not in seen:
+            seen.add(r["chat_id"])
+            unique.append(r["chat_id"])
+    return unique
+
+
 # ---------------------------------------------------------------------------
 # Budgets
 # ---------------------------------------------------------------------------

@@ -338,6 +338,36 @@ def decide_check(route: dict, history: list, last_check_time: str = None) -> dic
         return fallback
 
 
+def reason_weekly_report(routes_summary: list) -> str:
+    """Generate a weekly insight paragraph across all monitored routes.
+
+    routes_summary: list of dicts with keys: label, low, high, current, target,
+                    hit_count, checks, trend
+    """
+    lines = "\n".join(
+        f"- {r['label']}: low {r['low']:,.0f}, high {r['high']:,.0f}, "
+        f"current {r['current']:,.0f}, target {r['target']:,.0f}, "
+        f"hit {r['hit_count']}/{r['checks']} checks, trend: {r['trend']}"
+        for r in routes_summary
+    )
+    prompt = (
+        "You are a sharp travel price analyst. Given this week's price summary across "
+        "monitored routes, write a concise insight (3–5 sentences) that a traveler will "
+        "find actionable. Mention which routes are worth acting on, any notable trends, "
+        "and the best timing if relevant. Use Telegram HTML formatting (<b> for key figures).\n\n"
+        f"Routes this week:\n{lines}"
+    )
+    provider = _provider()
+    if provider == "anthropic":
+        return _anthropic_text(prompt, "claude-sonnet-4-6")
+    elif provider == "openai":
+        return _openai_text(prompt, "gpt-4o")
+    elif provider == "gemini":
+        return _gemini_text(prompt, "gemini-1.5-pro")
+    else:
+        raise ValueError(f"Unknown LLM_PROVIDER: {provider}")
+
+
 def categorize_expense(text: str) -> dict:
     """Parse Indonesian shorthand expense text.
 

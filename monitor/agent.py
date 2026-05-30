@@ -21,6 +21,8 @@ ROOT = Path(__file__).parent.parent
 os.chdir(ROOT)
 sys.path.insert(0, str(ROOT))
 
+Path("logs").mkdir(exist_ok=True)
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
