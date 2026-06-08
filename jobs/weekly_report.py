@@ -55,19 +55,6 @@ def main():
         logger.error(f"Could not load routes: {e}")
         return
     
-    # ========================================================
-    # HARDCODED FROM NOW
-    # ========================================================
-    if "flights" not in all_routes:
-        all_routes["flights"] = []
-        
-    all_routes["flights"].append({
-        "label": "CGK-DPS",        # Ganti dengan label Anda
-        "currency": "IDR",         
-        "max_price": 1200000       # Ganti dengan target harga Anda
-    })
-    # ========================================================
-
     routes_flat = [r for routes in all_routes.values() for r in routes]
     if not routes_flat:
         logger.info("No active routes — nothing to report.")
