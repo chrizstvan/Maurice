@@ -126,17 +126,18 @@ def main():
     footer = f"\n\n💡 <b>Insight</b>\n{insight}" if insight else ""
     message = header + "\n" + body + footer
 
-    # Send to all subscribers; fall back to global TELEGRAM_CHAT_ID
+    # Send to all subscribers plus the global TELEGRAM_CHAT_ID recipients
     try:
-        recipients = db.get_all_subscribers()
+        recipients = {str(s).strip() for s in db.get_all_subscribers()}
     except Exception as e:
         logger.warning(f"Could not fetch subscribers: {e}")
-        recipients = []
+        recipients = set()
 
-    if not recipients:
-        recipients = [config.TELEGRAM_CHAT_ID]
+    recipients.update(
+        cid.strip() for cid in str(config.TELEGRAM_CHAT_ID).split(",") if cid.strip()
+    )
 
-    for chat_id in recipients:
+    for chat_id in sorted(recipients):
         send_message(config.TELEGRAM_BOT_TOKEN, chat_id, message)
         logger.info(f"Report sent to {chat_id}")
 

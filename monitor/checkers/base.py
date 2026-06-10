@@ -15,6 +15,8 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from services.notify import format_error_alert
+
 logger = logging.getLogger(__name__)
 
 
@@ -91,11 +93,14 @@ class BaseChecker(ABC):
                 result = self.fetch(route)
             except Exception as e:
                 logger.error(f"Unexpected error fetching {route['label']}: {e}")
-                result = None
+                notify_fn(format_error_alert(
+                    self.checker_type,
+                    f"{route['label']}: {type(e).__name__}: {e}",
+                ))
+                continue
 
             if result is None:
-                from services.notify import format_error_alert
-                notify_fn(format_error_alert(self.checker_type, f"No data for {route['label']}"), route)
+                notify_fn(format_error_alert(self.checker_type, f"No data for {route['label']}"))
                 continue
 
             price = result["price"]

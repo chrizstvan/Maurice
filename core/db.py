@@ -4,7 +4,7 @@ All database calls go through this module.
 """
 
 import os
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 
 from supabase import create_client, Client
@@ -63,7 +63,7 @@ def get_week_history(route_label: str) -> list:
     """Return all price records for a route from the last 7 days, newest first."""
     from datetime import datetime, timedelta
     client = _client()
-    since = (datetime.utcnow() - timedelta(days=7)).isoformat()
+    since = (datetime.now(timezone.utc) - timedelta(days=7)).isoformat()
     result = (
         client.table("price_history")
         .select("*")

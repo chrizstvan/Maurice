@@ -37,7 +37,7 @@ from core import config
 from core import db
 from core import llm
 from monitor.checkers import REGISTRY
-from services.notify import send_message
+from services.notify import send_message, format_error_alert
 
 
 def load_last_prices() -> dict:
@@ -141,14 +141,18 @@ def main():
             logger.info(f"No routes configured for {checker_type}, skipping.")
             continue
         checker = REGISTRY[checker_type](routes=routes, config=config)
-        checker.run(
-            last_prices,
-            notify_fn=notify,
-            record_fn=record_price,
-            get_history_fn=get_price_history,
-            reason_fn=reason_price,
-            decide_fn=decide_route,
-        )
+        try:
+            checker.run(
+                last_prices,
+                notify_fn=notify,
+                record_fn=record_price,
+                get_history_fn=get_price_history,
+                reason_fn=reason_price,
+                decide_fn=decide_route,
+            )
+        except Exception as e:
+            logger.exception(f"Checker {checker_type} crashed: {e}")
+            notify(format_error_alert(checker_type, f"{type(e).__name__}: {e}"))
 
     save_last_prices(last_prices)
 
@@ -157,4 +161,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as e:
+        logger.exception(f"Agent crashed: {e}")
+        try:
+            notify(format_error_alert("price-monitor", f"{type(e).__name__}: {e}"))
+        except Exception:
+            logger.error("Could not send crash alert to Telegram.")
+        sys.exit(1)
