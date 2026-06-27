@@ -10,14 +10,21 @@ from typing import Optional
 from supabase import create_client, Client
 
 
+_CLIENT: Optional[Client] = None
+
+
 def _client() -> Client:
+    global _CLIENT
+    if _CLIENT is not None:
+        return _CLIENT
     url = os.environ.get("SUPABASE_URL", "")
     key = os.environ.get("SUPABASE_SERVICE_KEY", "")
     if not url or not key:
         raise RuntimeError(
             "Supabase is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_KEY env vars."
         )
-    return create_client(url, key)
+    _CLIENT = create_client(url, key)
+    return _CLIENT
 
 
 # ---------------------------------------------------------------------------
