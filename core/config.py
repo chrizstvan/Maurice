@@ -32,8 +32,16 @@ CHECKER_ROUTES = {
         {
             "from":      "CGK",
             "to":        "DPS",
-            "date":      "2026-08-15",
-            "max_price": 1_200_000,
+            "date":      "2026-08-16",
+            "max_price": 1_400_000,
+            "currency":  "IDR",
+            "label":     "Jakarta → Bali",
+        },
+        {
+            "from":      "CGK",
+            "to":        "DPS",
+            "date":      "2026-08-17",
+            "max_price": 1_400_000,
             "currency":  "IDR",
             "label":     "Jakarta → Bali",
         },
